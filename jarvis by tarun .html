@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JARVIS | Voice Assistant</title>
+<style>
+:root{--cyan:#39eaff;--blue:#168bff;--bg:#050b16;--muted:#8ba9bd}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;color:#eafaff;font-family:Arial,Helvetica,sans-serif;background:radial-gradient(ellipse at 50% 38%,#102b49 0%,#071323 42%,#030711 100%);overflow-x:hidden}
+body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.22;background-image:linear-gradient(rgba(57,234,255,.12) 1px,transparent 1px),linear-gradient(90deg,rgba(57,234,255,.12) 1px,transparent 1px);background-size:42px 42px;mask-image:linear-gradient(transparent,black 20%,black 80%,transparent)}
+header{display:flex;justify-content:space-between;align-items:center;padding:22px 5%;border-bottom:1px solid #39eaff30;letter-spacing:3px}
+.brand{font-size:20px;font-weight:700;color:var(--cyan);text-shadow:0 0 14px #39eaff88}
+.status{font-size:11px;color:#8fffd0;letter-spacing:2px}.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#55ffc1;box-shadow:0 0 10px #55ffc1;margin-right:8px}
+main{width:min(1000px,92%);margin:30px auto 50px;text-align:center}
+h1{font-size:clamp(25px,5vw,42px);letter-spacing:7px;margin:15px 0 7px;font-weight:400}
+.subtitle{color:var(--muted);font-size:12px;letter-spacing:3px}
+.core-wrap{height:330px;display:grid;place-items:center;position:relative}
+.core{width:210px;height:210px;border-radius:50%;position:relative;display:grid;place-items:center;filter:drop-shadow(0 0 18px #168bff88);transition:transform 0.1s ease-out}
+.core:before,.core:after{content:"";position:absolute;inset:0;border-radius:50%;border:2px solid transparent;border-top-color:var(--cyan);border-bottom-color:var(--blue);animation:spin 5s linear infinite}
+.core:after{inset:15px;border:1px dashed #39eaffaa;animation:spin 9s linear infinite reverse}
+.orbit{position:absolute;width:270px;height:270px;border:1px solid #39eaff66;border-radius:50%;transform:rotateX(67deg);animation:spin 12s linear infinite}
+.orbit.two{width:300px;height:300px;transform:rotateY(68deg);animation-duration:17s;animation-direction:reverse}
+.pulse{width:125px;height:125px;border-radius:50%;background:radial-gradient(circle,#b9ffff 0%,#39eaff 10%,#0876bd 42%,#071c35 72%);box-shadow:0 0 25px #39eaff,0 0 65px #168bff;animation:pulse 2.2s ease-in-out infinite;transition:transform 0.1s ease-out}
+.core.listening .pulse{background:radial-gradient(circle,#fff 0%,#76ffda 12%,#00b88a 45%,#052a2a 75%);box-shadow:0 0 28px #62ffd2,0 0 80px #00c99a}
+@keyframes spin{to{transform:rotate(360deg)}}@keyframes pulse{50%{transform:scale(1.12);filter:brightness(1.35)}}
+#state{font-size:12px;letter-spacing:3px;color:var(--cyan);min-height:18px}
+.controls{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin:20px 0}
+button{border:1px solid #39eaff88;background:#0b2942;color:#dffcff;padding:13px 22px;border-radius:4px;letter-spacing:1px;cursor:pointer;transition:.2s}
+button:hover{background:#12466b;box-shadow:0 0 18px #39eaff55}
+button.primary{background:#087eaa;color:white;border-color:#54efff}
+button:disabled{opacity:.45;cursor:not-allowed}
+.panel{max-width:720px;margin:28px auto 0;text-align:left;border:1px solid #39eaff40;background:#061323cc;box-shadow:0 0 35px #001b2e;padding:18px;border-radius:8px}
+.panel-head{display:flex;justify-content:space-between;color:var(--cyan);font-size:11px;letter-spacing:2px;margin-bottom:12px}
+#chat{height:190px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:4px}
+.msg{max-width:88%;padding:10px 13px;border-radius:8px;font-size:14px;line-height:1.45;white-space:pre-wrap}
+.msg.jarvis{align-self:flex-start;background:#0b2942;border-left:2px solid var(--cyan)}
+.msg.user{align-self:flex-end;background:#123c55;border-right:2px solid #55ffc1}
+.input-row{display:flex;gap:8px;margin-top:14px}
+input{flex:1;min-width:0;background:#030b15;border:1px solid #39eaff55;color:white;padding:13px;border-radius:4px;outline:none}
+input:focus{border-color:var(--cyan)}
+footer{color:#58778b;font-size:10px;letter-spacing:2px;margin-top:24px}
+@media(max-width:520px){header{padding:18px 4%}.core-wrap{height:290px}.core{transform:scale(.85)}.orbit.two{width:260px;height:260px}.input-row{flex-direction:column}button{padding:12px 15px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">J.A.R.V.I.S</div>
+  <div class="status"><span class="dot"></span>SYSTEM ONLINE</div>
+</header>
+<main>
+  <h1>GOOD EVENING</h1>
+  <div class="subtitle">JUST A RATHER VERY INTELLIGENT SYSTEM</div>
+
+  <div class="core-wrap">
+    <div class="orbit"></div><div class="orbit two"></div>
+    <div class="core" id="core"><div class="pulse" id="pulse"></div></div>
+  </div>
+  <div id="state">READY FOR YOUR COMMAND</div>
+
+  <div class="controls">
+    <button class="primary" id="listenBtn">🎙 ACTIVATE VOICE</button>
+    <button id="stopBtn">■ STOP SPEAKING</button>
+    <button id="clearBtn">CLEAR CHAT</button>
+  </div>
+
+  <section class="panel">
+    <div class="panel-head"><span>ASSISTANT CONSOLE</span><span id="clock">--:--:--</span></div>
+    <div id="chat">
+      <div class="msg jarvis">Good day. JARVIS systems are online. How may I assist you?</div>
+    </div>
+    <div class="input-row">
+      <input id="command" type="text" placeholder="Type a command..." autocomplete="off">
+      <button id="sendBtn" class="primary">SEND</button>
+    </div>
+  </section>
+  <footer>JARVIS INTERFACE // BROWSER EDITION</footer>
+</main>
+<script>
+const chat = document.getElementById('chat');
+const state = document.getElementById('state');
+const core = document.getElementById('core');
+const pulse = document.getElementById('pulse');
+const commandInput = document.getElementById('command');
+const listenBtn = document.getElementById('listenBtn');
+let recognition = null;
+let isListening = false;
+let audioCtx = null;
+let analyser = null;
+
+function addMessage(text, who = 'jarvis') {
+  const item = document.createElement('div');
+  item.className = 'msg ' + who;
+  item.textContent = text;
+  chat.appendChild(item);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function speak(text, onComplete) {
+  if (!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  
+  if (recognition && isListening) {
+    try { recognition.stop(); } catch(e){}
+  }
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 1; utterance.pitch = 0.95; utterance.volume = 1;
+  utterance.onstart = () => state.textContent = 'JARVIS SPEAKING';
+  utterance.onend = () => {
+    state.textContent = 'READY FOR YOUR COMMAND';
+    if (onComplete) onComplete();
+  };
+  speechSynthesis.speak(utterance);
+}
+
+function reply(text, voice = true) {
+  addMessage(text, 'jarvis');
+  if (voice) speak(text);
+}
+
+function processCommand(raw) {
+  const text = raw.trim();
+  if (!text) return;
+  addMessage(text, 'user');
+  commandInput.value = '';
+  const q = text.toLowerCase();
+
+  if (/\b(hello|hi|hey)\b/.test(q)) {
+    reply('Hello. JARVIS is online and ready to help.');
+  } else if (q.includes('your name')) {
+    reply('I am JARVIS, your browser-based voice assistant.');
+  } else if (q.includes('time')) {
+    reply('The current time is ' + new Date().toLocaleTimeString() + '.');
+  } else if (q.includes('date') || q.includes('day')) {
+    reply('Today is ' + new Date().toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) + '.');
+  } else if (q.includes('open youtube')) {
+    reply('Opening YouTube.');
+    window.open('https://www.youtube.com', '_blank', 'noopener');
+  } else if (q.includes('open google')) {
+    reply('Opening Google.');
+    window.open('https://www.google.com', '_blank', 'noopener');
+  } else if (q.includes('open gmail')) {
+    reply('Opening Gmail.');
+    window.open('https://mail.google.com', '_blank', 'noopener');
+  } else if (q.startsWith('search for ') || q.startsWith('search ')) {
+    const term = text.replace(/^search for\s+|^search\s+/i, '');
+    reply('Searching the web for ' + term + '.');
+    window.open('https://www.google.com/search?q=' + encodeURIComponent(term), '_blank', 'noopener');
+  } else if (q.includes('how are you')) {
+    reply('All systems are functioning normally. Thank you for asking.');
+  } else if (q.includes('stop')) {
+    speechSynthesis.cancel();
+    state.textContent = 'READY FOR YOUR COMMAND';
+    reply('Voice output stopped.', false);
+  } else if (q.includes('help') || q.includes('what can you do')) {
+    reply('You can ask me for the time or date, say hello, ask how I am, or tell me to open Google, YouTube, Gmail, or search the web.');
+  } else {
+    reply('I do not know that command yet. Try saying help to hear the available commands.');
+  }
+}
+
+async function initVisualizer() {
+  if (audioCtx) return;
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 64;
+    const source = audioCtx.createMediaStreamSource(stream);
+    source.connect(analyser);
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+    function loop() {
+      if (isListening) {
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+        let scale = 1 + (sum / dataArray.length / 128) * 0.35;
+        pulse.style.transform = `scale(${scale})`;
+      } else {
+        pulse.style.transform = `scale(1)`;
+      }
+      requestAnimationFrame(loop);
+    }
+    loop();
+  } catch(e) {
+    console.warn('Microphone stream for visualizer blocked:', e);
+  }
+}
+
+function startListening() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    reply('Voice recognition is not supported in this browser. Please use Google Chrome.');
+    return;
+  }
+
+  initVisualizer();
+
+  if (recognition) { try { recognition.stop(); } catch(e){} }
+
+  recognition = new SpeechRecognition();
+  recognition.lang = navigator.language || 'en-US';
+  recognition.continuous = false;
+  recognition.interimResults = true;
+
+  recognition.onstart = () => {
+    isListening = true;
+    core.classList.add('listening');
+    state.textContent = 'LISTENING... SPEAK NOW';
+    listenBtn.textContent = '● LISTENING';
+  };
+
+  recognition.onresult = (event) => {
+    let interim = '';
+    let final = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      if (event.results[i].isFinal) {
+        final += event.results[i][0].transcript;
+      } else {
+        interim += event.results[i][0].transcript;
+      }
+    }
+    if (interim) state.textContent = 'HEARING: ' + interim.toUpperCase();
+    if (final) processCommand(final);
+  };
+
+  recognition.onerror = (event) => {
+    isListening = false;
+    if (event.error === 'not-allowed') {
+      state.textContent = 'MICROPHONE PERMISSION DENIED';
+      reply('Microphone access was denied. Please allow microphone permissions in your browser settings.');
+    } else if (event.error === 'network') {
+      state.textContent = 'NETWORK ERROR (SPEECH API)';
+      reply('Speech recognition requires an active internet connection in Chrome.');
+    } else {
+      state.textContent = 'ERROR: ' + event.error.toUpperCase();
+    }
+  };
+
+  recognition.onend = () => {
+    isListening = false;
+    core.classList.remove('listening');
+    listenBtn.textContent = '🎙 ACTIVATE VOICE';
+    if (state.textContent.startsWith('LISTENING') || state.textContent.startsWith('HEARING')) {
+      state.textContent = 'READY FOR YOUR COMMAND';
+    }
+  };
+
+  try {
+    recognition.start();
+  } catch(e) {
+    state.textContent = 'VOICE INPUT UNAVAILABLE';
+  }
+}
+
+listenBtn.addEventListener('click', startListening);
+document.getElementById('sendBtn').addEventListener('click', () => processCommand(commandInput.value));
+commandInput.addEventListener('keydown', e => { if (e.key === 'Enter') processCommand(commandInput.value); });
+
+document.getElementById('stopBtn').addEventListener('click', () => {
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  if (recognition) { try { recognition.stop(); } catch(e){} }
+  isListening = false;
+  state.textContent = 'READY FOR YOUR COMMAND';
+});
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  chat.innerHTML = '';
+  addMessage('Console cleared. JARVIS is ready.');
+});
+
+function updateClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString();
+}
+updateClock();
+setInterval(updateClock, 1000);
+</script>
+</body>
+</html>

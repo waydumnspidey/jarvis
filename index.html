@@ -80,6 +80,18 @@ footer{color:#58778b;font-size:10px;letter-spacing:2px;margin-top:24px}
 
   <section class="panel">
     <div class="panel-head"><span>ASSISTANT CONSOLE</span><span id="clock">--:--:--</span></div>
+    
+    <!-- Audio / Video Media Player Widget -->
+    <div id="mediaPlayer" style="display:none; margin-bottom: 12px; border: 1px solid var(--cyan); border-radius: 6px; padding: 10px; background: #030b15;">
+      <div style="display:flex; justify-shadow:space-between; align-items:center; margin-bottom:6px;">
+        <span style="font-size:11px; color:var(--cyan); letter-spacing:1px;">🎵 MEDIA BROADCAST PLAYER</span>
+        <button id="closeMediaBtn" style="padding: 2px 8px; font-size: 10px; border-color: #ff6b6b; color: #ff6b6b; background: transparent;">✕ CLOSE</button>
+      </div>
+      <div style="position:relative; width:100%; height:0; padding-bottom:56.25%;">
+        <iframe id="mediaFrame" style="position:absolute; top:0; left:0; width:100%; height:100%; border:none; border-radius:4px;" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+      </div>
+    </div>
+
     <div id="chat">
       <div class="msg jarvis">Good day. JARVIS AI systems are online. How may I assist you today, sir?</div>
     </div>
@@ -103,28 +115,13 @@ const keyPanel = document.getElementById('keyPanel');
 const apiKeyInput = document.getElementById('apiKeyInput');
 const saveKeyBtn = document.getElementById('saveKeyBtn');
 const keyStatus = document.getElementById('keyStatus');
+const mediaPlayer = document.getElementById('mediaPlayer');
+const mediaFrame = document.getElementById('mediaFrame');
+const closeMediaBtn = document.getElementById('closeMediaBtn');
 
-// =========================================================================
-// 🔑 API KEY PLACEHOLDER: Paste your Gemini API key inside the quotes below
-// =========================================================================
-const GEMINI_API_KEY_PLACEHOLDER = "";
-
-let userApiKey = GEMINI_API_KEY_PLACEHOLDER || sessionStorage.getItem('JARVIS_API_KEY') || "";
-
-function updateKeyStatusUI() {
-  if (userApiKey) {
-    keyStatus.textContent = "KEY ACTIVE";
-    keyStatus.style.color = "#55ffc1";
-  } else {
-    keyStatus.textContent = "NOT SET";
-    keyStatus.style.color = "#ff6b6b";
-  }
-}
-updateKeyStatusUI();
-
-settingsBtn.addEventListener('click', () => {
-  keyPanel.style.display = keyPanel.style.display === 'none' ? 'block' : 'none';
-  if (userApiKey) apiKeyInput.value = userApiKey;
+closeMediaBtn.addEventListener('click', () => {
+  mediaPlayer.style.display = 'none';
+  mediaFrame.src = '';
 });
 
 saveKeyBtn.addEventListener('click', () => {
@@ -264,25 +261,17 @@ function processCommand(raw) {
   commandInput.value = '';
   const q = text.toLowerCase();
 
-  // Local quick action commands - Music & Media player handling
+  // Local quick action commands - Direct Audio/Video Broadcast player handling
   if (/^(play|listen to|put on|sing)\s+/i.test(q) || q.includes('play song') || q.includes('play music')) {
     const song = text.replace(/^play\s+song\s+|^play\s+music\s+|^play\s+|^listen to\s+|^put on\s+|^sing\s+/i, '');
-    const searchUrl = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(song);
     
-    // Open YouTube immediately to prevent browser popup blocking
-    const newWindow = window.open(searchUrl, '_blank', 'noopener');
+    // Use YouTube search embed URL to play audio/video inside JARVIS directly
+    const embedUrl = 'https://www.youtube-nocookie.com/embed?listType=search&list=' + encodeURIComponent(song) + '&autoplay=1';
     
-    if (newWindow) {
-      reply('Opening and playing ' + song + ' on YouTube now, sir.');
-    } else {
-      reply('Pop-up blocked by your browser, sir. Click to open YouTube: ' + searchUrl, false);
-      // Fallback message link in chat
-      const item = document.createElement('div');
-      item.className = 'msg jarvis';
-      item.innerHTML = ` Sir, click here to play: <a href="${searchUrl}" target="_blank" style="color:var(--cyan);text-decoration:underline;">Listen to ${song} on YouTube</a>`;
-      chat.appendChild(item);
-      chat.scrollTop = chat.scrollHeight;
-    }
+    mediaFrame.src = embedUrl;
+    mediaPlayer.style.display = 'block';
+    
+    reply('Broadcasting ' + song + ' directly in your console now, sir.');
   } else if (q.includes('your name')) {
     reply('I am JARVIS, your browser-based AI voice assistant.');
   } else if (q.includes('time')) {

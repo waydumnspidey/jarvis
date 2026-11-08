@@ -61,6 +61,7 @@ footer{color:#58778b;font-size:10px;letter-spacing:2px;margin-top:24px}
   <div class="controls">
     <button class="primary" id="listenBtn">🎙 ACTIVATE VOICE</button>
     <button id="continuousBtn" class="active">🔄 ALWAYS LISTENING: ON</button>
+    <button id="wakeWordBtn" class="active">🗣 WAKE WORD (JARVIS): ON</button>
     <button id="stopBtn">■ STOP SPEAKING</button>
     <button id="settingsBtn">⚙️ API KEY</button>
     <button id="clearBtn">CLEAR CHAT</button>
@@ -110,6 +111,7 @@ const pulse = document.getElementById('pulse');
 const commandInput = document.getElementById('command');
 const listenBtn = document.getElementById('listenBtn');
 const continuousBtn = document.getElementById('continuousBtn');
+const wakeWordBtn = document.getElementById('wakeWordBtn');
 const settingsBtn = document.getElementById('settingsBtn');
 const keyPanel = document.getElementById('keyPanel');
 const apiKeyInput = document.getElementById('apiKeyInput');
@@ -122,6 +124,7 @@ const closeMediaBtn = document.getElementById('closeMediaBtn');
 // Global API key storage initialization
 const GEMINI_API_KEY_PLACEHOLDER = "";
 let userApiKey = sessionStorage.getItem('JARVIS_API_KEY') || "";
+let wakeWordEnabled = true;
 
 function updateKeyStatusUI() {
   const active = userApiKey || GEMINI_API_KEY_PLACEHOLDER;
@@ -276,67 +279,34 @@ async function askAI(userQuery) {
 
 // Function to fetch direct YouTube video ID using search grounding
 async function playMusicBroadcast(songQuery) {
-  state.textContent = 'FETCHING MEDIA...';
-  const activeKey = userApiKey || GEMINI_API_KEY_PLACEHOLDER;
+  state.textContent = 'LAUNCHING MEDIA...';
+  
+  // Create direct YouTube search URL
+  const targetUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(songQuery)}`;
 
-  if (!activeKey) {
-    reply("Sir, please configure your Gemini API key to enable direct music streaming.");
-    state.textContent = 'READY FOR YOUR COMMAND';
-    keyPanel.style.display = 'block';
-    return;
+  // Immediately attempt opening in a new window/tab
+  const win = window.open(targetUrl, '_blank', 'noopener,noreferrer');
+
+  // Provide interactive fallback inside chat window if pop-up was blocked
+  const musicCardHtml = `
+    <div style="margin-top:8px; padding:10px; border:1px solid var(--cyan); border-radius:6px; background:#030b15; text-align:center;">
+      <div style="font-size:12px; color:var(--cyan); font-weight:bold; margin-bottom:6px;">🎵 MEDIA READY: ${songQuery.toUpperCase()}</div>
+      <a href="${targetUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block; padding:8px 16px; background:#087eaa; color:white; text-decoration:none; border-radius:4px; font-size:12px; font-weight:bold; border:1px solid #54efff;">▶ LAUNCH MUSIC PLAYER</a>
+    </div>
+  `;
+
+  addMessage(`Searching and playing "${songQuery}" for you now, sir.`, 'jarvis');
+  speak(`Playing ${songQuery} on YouTube now, sir.`);
+
+  const lastMsg = chat.lastElementChild;
+  if (lastMsg) {
+    lastMsg.innerHTML += musicCardHtml;
   }
 
-  const payload = {
-    contents: [{
-      parts: [{ text: `Find the official YouTube video ID for the song: "${songQuery}". Return ONLY a JSON object with two fields: "videoId" (the 11 character YouTube video ID) and "title" (song title). No extra text.` }]
-    }],
-    tools: [{ "google_search": {} }],
-    generationConfig: { responseMimeType: "application/json" }
-  };
-
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${activeKey}`;
-
-  try {
-    const res = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-    const jsonStr = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    
-    let videoId = "";
-    let songTitle = songQuery;
-
-    if (jsonStr) {
-      const parsed = JSON.parse(jsonStr);
-      videoId = parsed.videoId || "";
-      songTitle = parsed.title || songQuery;
-    }
-
-    if (videoId) {
-      const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1`;
-      mediaFrame.src = embedUrl;
-      mediaPlayer.style.display = 'block';
-      
-      const linkHtml = `<br><a href="https://www.youtube.com/watch?v=${videoId}" target="_blank" style="color:var(--cyan); text-decoration:underline; font-size:12px;">▶ Open direct link on YouTube if preview is restricted</a>`;
-      addMessage(`Now playing: "${songTitle}"`, 'jarvis');
-      speak(`Broadcasting ${songTitle} directly in your console now, sir.`);
-      
-      const lastMsg = chat.lastElementChild;
-      if (lastMsg) lastMsg.innerHTML += linkHtml;
-    } else {
-      // Direct Fallback if ID parsing fails
-      const fallbackSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(songQuery)}`;
-      window.open(fallbackSearchUrl, '_blank');
-      reply(`Opening YouTube search results for "${songQuery}" in a new tab, sir.`);
-    }
-  } catch (err) {
-    console.error("Music fetch error:", err);
-    const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(songQuery)}`;
-    window.open(searchUrl, '_blank');
-    reply(`Launching YouTube results for "${songQuery}", sir.`);
-  }
+  // Also load into embedded player as backup
+  const searchEmbed = `https://www.youtube.com/embed?listType=search&list=${encodeURIComponent(songQuery)}&autoplay=1`;
+  mediaFrame.src = searchEmbed;
+  mediaPlayer.style.display = 'block';
 }
 
 function processCommand(raw) {
@@ -444,8 +414,38 @@ function startListening() {
         interim += event.results[i][0].transcript;
       }
     }
-    if (interim) state.textContent = 'HEARING: ' + interim.toUpperCase();
-    if (final) processCommand(final);
+    
+    if (interim) {
+      state.textContent = 'HEARING: ' + interim.toUpperCase();
+    }
+    
+    if (final) {
+      const cleanText = final.trim();
+      const lowerText = cleanText.toLowerCase();
+
+      // Check if Wake Word filtering is enabled
+      if (wakeWordEnabled) {
+        if (lowerText.includes('jarvis')) {
+          // Visual feedback that wake word was detected
+          pulse.style.boxShadow = "0 0 35px #ffd700, 0 0 85px #ff8c00";
+          setTimeout(() => { pulse.style.boxShadow = ""; }, 1500);
+
+          // Strip out "jarvis" from the command text
+          const strippedCommand = cleanText.replace(/jarvis/gi, '').trim();
+          if (strippedCommand.length > 0) {
+            processCommand(strippedCommand);
+          } else {
+            reply("Yes, sir? How can I assist you?");
+          }
+        } else {
+          // Ignore background speech that does not address JARVIS
+          state.textContent = 'AWAITING WAKE WORD ("JARVIS")...';
+        }
+      } else {
+        // Direct processing without wake word filter
+        processCommand(cleanText);
+      }
+    }
   };
 
   recognition.onerror = (event) => {
@@ -492,6 +492,19 @@ continuousBtn.addEventListener('click', () => {
     continuousBtn.classList.remove('active');
     continuousBtn.textContent = '🔄 ALWAYS LISTENING: OFF';
     if (recognition) try { recognition.stop(); } catch(e){}
+  }
+});
+
+wakeWordBtn.addEventListener('click', () => {
+  wakeWordEnabled = !wakeWordEnabled;
+  if (wakeWordEnabled) {
+    wakeWordBtn.classList.add('active');
+    wakeWordBtn.textContent = '🗣 WAKE WORD (JARVIS): ON';
+    state.textContent = 'AWAITING WAKE WORD ("JARVIS")...';
+  } else {
+    wakeWordBtn.classList.remove('active');
+    wakeWordBtn.textContent = '🗣 WAKE WORD (JARVIS): OFF';
+    state.textContent = 'READY FOR YOUR COMMAND';
   }
 });
 

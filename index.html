@@ -215,7 +215,48 @@ async function askAI(userQuery) {
     return;
   }
 
-// Function to fetch direct YouTube video ID using search grounding and launch clean embed (Fixes Error 153)
+  // Save context into conversation history
+  conversationHistory.push({ role: 'user', parts: [{ text: userQuery }] });
+
+  // Limit memory to 20 conversation turns for high understanding
+  if (conversationHistory.length > 20) {
+    conversationHistory = conversationHistory.slice(-20);
+  }
+
+  const systemInstruction = "You are JARVIS, an advanced, highly intelligent AI assistant inspired by Tony Stark's assistant in Iron Man. Respond concisely, analytically, and politely. Call the user 'sir' when appropriate.";
+
+  const payload = {
+    contents: conversationHistory,
+    systemInstruction: { parts: [{ text: systemInstruction }] }
+  };
+
+  try {
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${activeKey}`;
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error?.message || `HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    const aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "I apologize, sir, but I received no content in response.";
+
+    conversationHistory.push({ role: 'model', parts: [{ text: aiText }] });
+    state.textContent = 'READY FOR YOUR COMMAND';
+    reply(aiText);
+  } catch (err) {
+    console.error('Gemini API Error:', err);
+    state.textContent = 'SYSTEM ERROR';
+    reply(`An error occurred while communicating with my neural core: ${err.message}`);
+  }
+}
+
+// Function to fetch direct YouTube video ID using search grounding and launch clean embed
 async function playMusicBroadcast(songQuery) {
   state.textContent = 'SEARCHING MEDIA TRACK...';
   addMessage(`Locating audio stream for "${songQuery}", sir...`, 'jarvis');

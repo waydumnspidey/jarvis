@@ -119,6 +119,26 @@ const mediaPlayer = document.getElementById('mediaPlayer');
 const mediaFrame = document.getElementById('mediaFrame');
 const closeMediaBtn = document.getElementById('closeMediaBtn');
 
+// Global API key storage initialization
+const GEMINI_API_KEY_PLACEHOLDER = "";
+let userApiKey = sessionStorage.getItem('JARVIS_API_KEY') || "";
+
+function updateKeyStatusUI() {
+  const active = userApiKey || GEMINI_API_KEY_PLACEHOLDER;
+  if (active) {
+    keyStatus.textContent = "KEY ACTIVE";
+    keyStatus.style.color = "#55ffc1";
+  } else {
+    keyStatus.textContent = "NOT SET";
+    keyStatus.style.color = "#ff6b6b";
+  }
+}
+updateKeyStatusUI();
+
+settingsBtn.addEventListener('click', () => {
+  keyPanel.style.display = keyPanel.style.display === 'none' ? 'block' : 'none';
+});
+
 closeMediaBtn.addEventListener('click', () => {
   mediaPlayer.style.display = 'none';
   mediaFrame.src = '';
@@ -254,6 +274,71 @@ async function askAI(userQuery) {
   }
 }
 
+// Function to fetch direct YouTube video ID using search grounding
+async function playMusicBroadcast(songQuery) {
+  state.textContent = 'FETCHING MEDIA...';
+  const activeKey = userApiKey || GEMINI_API_KEY_PLACEHOLDER;
+
+  if (!activeKey) {
+    reply("Sir, please configure your Gemini API key to enable direct music streaming.");
+    state.textContent = 'READY FOR YOUR COMMAND';
+    keyPanel.style.display = 'block';
+    return;
+  }
+
+  const payload = {
+    contents: [{
+      parts: [{ text: `Find the official YouTube video ID for the song: "${songQuery}". Return ONLY a JSON object with two fields: "videoId" (the 11 character YouTube video ID) and "title" (song title). No extra text.` }]
+    }],
+    tools: [{ "google_search": {} }],
+    generationConfig: { responseMimeType: "application/json" }
+  };
+
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${activeKey}`;
+
+  try {
+    const res = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    const jsonStr = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    let videoId = "";
+    let songTitle = songQuery;
+
+    if (jsonStr) {
+      const parsed = JSON.parse(jsonStr);
+      videoId = parsed.videoId || "";
+      songTitle = parsed.title || songQuery;
+    }
+
+    if (videoId) {
+      const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1`;
+      mediaFrame.src = embedUrl;
+      mediaPlayer.style.display = 'block';
+      
+      const linkHtml = `<br><a href="https://www.youtube.com/watch?v=${videoId}" target="_blank" style="color:var(--cyan); text-decoration:underline; font-size:12px;">▶ Open direct link on YouTube if preview is restricted</a>`;
+      addMessage(`Now playing: "${songTitle}"`, 'jarvis');
+      speak(`Broadcasting ${songTitle} directly in your console now, sir.`);
+      
+      const lastMsg = chat.lastElementChild;
+      if (lastMsg) lastMsg.innerHTML += linkHtml;
+    } else {
+      // Direct Fallback if ID parsing fails
+      const fallbackSearchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(songQuery)}`;
+      window.open(fallbackSearchUrl, '_blank');
+      reply(`Opening YouTube search results for "${songQuery}" in a new tab, sir.`);
+    }
+  } catch (err) {
+    console.error("Music fetch error:", err);
+    const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(songQuery)}`;
+    window.open(searchUrl, '_blank');
+    reply(`Launching YouTube results for "${songQuery}", sir.`);
+  }
+}
+
 function processCommand(raw) {
   const text = raw.trim();
   if (!text) return;
@@ -264,14 +349,7 @@ function processCommand(raw) {
   // Local quick action commands - Direct Audio/Video Broadcast player handling
   if (/^(play|listen to|put on|sing)\s+/i.test(q) || q.includes('play song') || q.includes('play music')) {
     const song = text.replace(/^play\s+song\s+|^play\s+music\s+|^play\s+|^listen to\s+|^put on\s+|^sing\s+/i, '');
-    
-    // Use YouTube search embed URL to play audio/video inside JARVIS directly
-    const embedUrl = 'https://www.youtube-nocookie.com/embed?listType=search&list=' + encodeURIComponent(song) + '&autoplay=1';
-    
-    mediaFrame.src = embedUrl;
-    mediaPlayer.style.display = 'block';
-    
-    reply('Broadcasting ' + song + ' directly in your console now, sir.');
+    playMusicBroadcast(song);
   } else if (q.includes('your name')) {
     reply('I am JARVIS, your browser-based AI voice assistant.');
   } else if (q.includes('time')) {

@@ -29,10 +29,10 @@ h1{font-size:clamp(25px,5vw,42px);letter-spacing:7px;margin:15px 0 7px;font-weig
 button{border:1px solid #39eaff88;background:#0b2942;color:#dffcff;padding:13px 22px;border-radius:4px;letter-spacing:1px;cursor:pointer;transition:.2s}
 button:hover{background:#12466b;box-shadow:0 0 18px #39eaff55}
 button.primary{background:#087eaa;color:white;border-color:#54efff}
-button:disabled{opacity:.45;cursor:not-allowed}
+button.active{background:#00b88a;border-color:#55ffc1;color:#000;font-weight:bold}
 .panel{max-width:720px;margin:28px auto 0;text-align:left;border:1px solid #39eaff40;background:#061323cc;box-shadow:0 0 35px #001b2e;padding:18px;border-radius:8px}
 .panel-head{display:flex;justify-content:space-between;color:var(--cyan);font-size:11px;letter-spacing:2px;margin-bottom:12px}
-#chat{height:190px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:4px}
+#chat{height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:4px}
 .msg{max-width:88%;padding:10px 13px;border-radius:8px;font-size:14px;line-height:1.45;white-space:pre-wrap}
 .msg.jarvis{align-self:flex-start;background:#0b2942;border-left:2px solid var(--cyan)}
 .msg.user{align-self:flex-end;background:#123c55;border-right:2px solid #55ffc1}
@@ -60,6 +60,7 @@ footer{color:#58778b;font-size:10px;letter-spacing:2px;margin-top:24px}
 
   <div class="controls">
     <button class="primary" id="listenBtn">🎙 ACTIVATE VOICE</button>
+    <button id="continuousBtn" class="active">🔄 ALWAYS LISTENING: ON</button>
     <button id="stopBtn">■ STOP SPEAKING</button>
     <button id="clearBtn">CLEAR CHAT</button>
   </div>
@@ -67,10 +68,10 @@ footer{color:#58778b;font-size:10px;letter-spacing:2px;margin-top:24px}
   <section class="panel">
     <div class="panel-head"><span>ASSISTANT CONSOLE</span><span id="clock">--:--:--</span></div>
     <div id="chat">
-      <div class="msg jarvis">Good day. JARVIS systems are online. How may I assist you?</div>
+      <div class="msg jarvis">Good day. JARVIS AI systems are online. How may I assist you today, sir?</div>
     </div>
     <div class="input-row">
-      <input id="command" type="text" placeholder="Type a command..." autocomplete="off">
+      <input id="command" type="text" placeholder="Type a command or ask a question..." autocomplete="off">
       <button id="sendBtn" class="primary">SEND</button>
     </div>
   </section>
@@ -83,10 +84,14 @@ const core = document.getElementById('core');
 const pulse = document.getElementById('pulse');
 const commandInput = document.getElementById('command');
 const listenBtn = document.getElementById('listenBtn');
+const continuousBtn = document.getElementById('continuousBtn');
+
 let recognition = null;
 let isListening = false;
+let isAlwaysListening = true; // Enabled by default
 let audioCtx = null;
 let analyser = null;
+let conversationHistory = [];
 
 function addMessage(text, who = 'jarvis') {
   const item = document.createElement('div');
@@ -100,6 +105,7 @@ function speak(text, onComplete) {
   if (!('speechSynthesis' in window)) return;
   speechSynthesis.cancel();
   
+  // Pause recognition while JARVIS speaks so he doesn't listen to himself
   if (recognition && isListening) {
     try { recognition.stop(); } catch(e){}
   }
@@ -110,6 +116,9 @@ function speak(text, onComplete) {
   utterance.onend = () => {
     state.textContent = 'READY FOR YOUR COMMAND';
     if (onComplete) onComplete();
+    if (isAlwaysListening) {
+      setTimeout(startListening, 300);
+    }
   };
   speechSynthesis.speak(utterance);
 }
@@ -119,6 +128,45 @@ function reply(text, voice = true) {
   if (voice) speak(text);
 }
 
+// Call Gemini API for answering questions like ChatGPT
+async function askAI(userQuery) {
+  state.textContent = 'JARVIS THINKING...';
+  
+  conversationHistory.push({ role: "user", parts: [{ text: userQuery }] });
+
+  const payload = {
+    contents: conversationHistory,
+    systemInstruction: {
+      parts: [{ text: "You are J.A.R.V.I.S., Tony Stark's iconic, highly intelligent, polite, concise, and sophisticated AI assistant. Answer all questions accurately and naturally. Keep responses clear and brief enough for spoken voice output." }]
+    }
+  };
+
+  const apiKey = "";
+  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+    const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text || "I was unable to process that request at this moment, sir.";
+    
+    conversationHistory.push({ role: "model", parts: [{ text: replyText }] });
+
+    if (conversationHistory.length > 10) {
+      conversationHistory = conversationHistory.slice(-10);
+    }
+
+    reply(replyText);
+  } catch (error) {
+    console.error("AI Error:", error);
+    reply("My communication systems encountered an issue reaching the server.");
+  }
+}
+
 function processCommand(raw) {
   const text = raw.trim();
   if (!text) return;
@@ -126,10 +174,9 @@ function processCommand(raw) {
   commandInput.value = '';
   const q = text.toLowerCase();
 
-  if (/\b(hello|hi|hey)\b/.test(q)) {
-    reply('Hello. JARVIS is online and ready to help.');
-  } else if (q.includes('your name')) {
-    reply('I am JARVIS, your browser-based voice assistant.');
+  // Local quick action commands
+  if (q.includes('your name')) {
+    reply('I am JARVIS, your browser-based AI voice assistant.');
   } else if (q.includes('time')) {
     reply('The current time is ' + new Date().toLocaleTimeString() + '.');
   } else if (q.includes('date') || q.includes('day')) {
@@ -147,16 +194,16 @@ function processCommand(raw) {
     const term = text.replace(/^search for\s+|^search\s+/i, '');
     reply('Searching the web for ' + term + '.');
     window.open('https://www.google.com/search?q=' + encodeURIComponent(term), '_blank', 'noopener');
-  } else if (q.includes('how are you')) {
-    reply('All systems are functioning normally. Thank you for asking.');
-  } else if (q.includes('stop')) {
+  } else if (q === 'stop') {
+    isAlwaysListening = false;
+    continuousBtn.classList.remove('active');
+    continuousBtn.textContent = '🔄 ALWAYS LISTENING: OFF';
     speechSynthesis.cancel();
     state.textContent = 'READY FOR YOUR COMMAND';
-    reply('Voice output stopped.', false);
-  } else if (q.includes('help') || q.includes('what can you do')) {
-    reply('You can ask me for the time or date, say hello, ask how I am, or tell me to open Google, YouTube, Gmail, or search the web.');
+    reply('Voice output and continuous listening stopped.', false);
   } else {
-    reply('I do not know that command yet. Try saying help to hear the available commands.');
+    // Route any general question to built-in Gemini AI
+    askAI(text);
   }
 }
 
@@ -192,7 +239,7 @@ async function initVisualizer() {
 function startListening() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
-    reply('Voice recognition is not supported in this browser. Please use Google Chrome.');
+    reply('Voice recognition is not supported in this browser. Please use Google Chrome or Edge.');
     return;
   }
 
@@ -228,12 +275,14 @@ function startListening() {
 
   recognition.onerror = (event) => {
     isListening = false;
+    if (event.error === 'no-speech' && isAlwaysListening) {
+      return;
+    }
     if (event.error === 'not-allowed') {
       state.textContent = 'MICROPHONE PERMISSION DENIED';
-      reply('Microphone access was denied. Please allow microphone permissions in your browser settings.');
+      reply('Microphone access was denied. Please allow microphone permissions in browser settings.');
     } else if (event.error === 'network') {
       state.textContent = 'NETWORK ERROR (SPEECH API)';
-      reply('Speech recognition requires an active internet connection in Chrome.');
     } else {
       state.textContent = 'ERROR: ' + event.error.toUpperCase();
     }
@@ -243,7 +292,10 @@ function startListening() {
     isListening = false;
     core.classList.remove('listening');
     listenBtn.textContent = '🎙 ACTIVATE VOICE';
-    if (state.textContent.startsWith('LISTENING') || state.textContent.startsWith('HEARING')) {
+    
+    if (isAlwaysListening && !speechSynthesis.speaking) {
+      setTimeout(startListening, 200);
+    } else if (state.textContent.startsWith('LISTENING') || state.textContent.startsWith('HEARING')) {
       state.textContent = 'READY FOR YOUR COMMAND';
     }
   };
@@ -255,11 +307,33 @@ function startListening() {
   }
 }
 
-listenBtn.addEventListener('click', startListening);
+continuousBtn.addEventListener('click', () => {
+  isAlwaysListening = !isAlwaysListening;
+  if (isAlwaysListening) {
+    continuousBtn.classList.add('active');
+    continuousBtn.textContent = '🔄 ALWAYS LISTENING: ON';
+    startListening();
+  } else {
+    continuousBtn.classList.remove('active');
+    continuousBtn.textContent = '🔄 ALWAYS LISTENING: OFF';
+    if (recognition) try { recognition.stop(); } catch(e){}
+  }
+});
+
+listenBtn.addEventListener('click', () => {
+  isAlwaysListening = true;
+  continuousBtn.classList.add('active');
+  continuousBtn.textContent = '🔄 ALWAYS LISTENING: ON';
+  startListening();
+});
+
 document.getElementById('sendBtn').addEventListener('click', () => processCommand(commandInput.value));
 commandInput.addEventListener('keydown', e => { if (e.key === 'Enter') processCommand(commandInput.value); });
 
 document.getElementById('stopBtn').addEventListener('click', () => {
+  isAlwaysListening = false;
+  continuousBtn.classList.remove('active');
+  continuousBtn.textContent = '🔄 ALWAYS LISTENING: OFF';
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   if (recognition) { try { recognition.stop(); } catch(e){} }
   isListening = false;
@@ -268,6 +342,7 @@ document.getElementById('stopBtn').addEventListener('click', () => {
 
 document.getElementById('clearBtn').addEventListener('click', () => {
   chat.innerHTML = '';
+  conversationHistory = [];
   addMessage('Console cleared. JARVIS is ready.');
 });
 

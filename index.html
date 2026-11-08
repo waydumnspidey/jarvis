@@ -220,7 +220,7 @@ async function askAI(userQuery) {
   const payload = {
     contents: conversationHistory,
     systemInstruction: {
-      parts: [{ text: "You are J.A.R.V.I.S., Tony Stark's iconic, highly intelligent, polite, concise, and sophisticated AI assistant. Answer all questions accurately and naturally. Keep responses clear and brief enough for spoken voice output." }]
+      parts: [{ text: "You are J.A.R.V.I.S., Tony Stark's legendary AI system. You possess hyper-intelligent analytical capabilities, deep logical reasoning, and a witty, polite demeanor. Answer all questions with high conceptual understanding and accuracy. Provide structured, precise answers while keeping spoken phrasing crisp and natural for voice synthesis." }]
     }
   };
 
@@ -256,8 +256,8 @@ async function askAI(userQuery) {
       if (replyText) {
         conversationHistory.push({ role: "model", parts: [{ text: replyText }] });
 
-        if (conversationHistory.length > 10) {
-          conversationHistory = conversationHistory.slice(-10);
+        if (conversationHistory.length > 20) {
+          conversationHistory = conversationHistory.slice(-20);
         }
 
         reply(replyText);
@@ -279,23 +279,19 @@ async function askAI(userQuery) {
 
 // Function to fetch direct YouTube video ID using search grounding
 async function playMusicBroadcast(songQuery) {
-  state.textContent = 'LAUNCHING MEDIA...';
+  state.textContent = 'LAUNCHING MEDIA BROADCAST...';
   
-  // Clean direct search URL for YouTube / YouTube Music
   const targetUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(songQuery)}`;
 
-  // Immediately launch in browser tab
-  window.open(targetUrl, '_blank', 'noopener,noreferrer');
-
-  // Provide interactive fallback card inside the chat window
+  // Provide interactive fallback card inside the chat window with direct listening options
   const musicCardHtml = `
-    <div style="margin-top:8px; padding:10px; border:1px solid var(--cyan); border-radius:6px; background:#030b15; text-align:center;">
-      <div style="font-size:12px; color:var(--cyan); font-weight:bold; margin-bottom:6px;">🎵 MEDIA STREAM: ${songQuery.toUpperCase()}</div>
-      <a href="${targetUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block; padding:8px 16px; background:#087eaa; color:white; text-decoration:none; border-radius:4px; font-size:12px; font-weight:bold; border:1px solid #54efff;">▶ OPEN AUDIO STREAM ON YOUTUBE</a>
+    <div style="margin-top:8px; padding:12px; border:1px solid var(--cyan); border-radius:6px; background:#030b15; text-align:center; box-shadow:0 0 15px #39eaff33;">
+      <div style="font-size:12px; color:var(--cyan); font-weight:bold; margin-bottom:8px; letter-spacing:1px;">🎵 MEDIA STREAM READY: ${songQuery.toUpperCase()}</div>
+      <a href="${targetUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block; padding:10px 18px; background:#087eaa; color:white; text-decoration:none; border-radius:4px; font-size:12px; font-weight:bold; border:1px solid #54efff; box-shadow:0 0 10px #39eaff55;">▶ LISTEN ON YOUTUBE</a>
     </div>
   `;
 
-  addMessage(`Searching and playing "${songQuery}" for you now, sir.`, 'jarvis');
+  addMessage(`Searching and broadcasting "${songQuery}" for you now, sir.`, 'jarvis');
   speak(`Playing ${songQuery} for you now, sir.`);
 
   const lastMsg = chat.lastElementChild;
@@ -303,9 +299,14 @@ async function playMusicBroadcast(songQuery) {
     lastMsg.innerHTML += musicCardHtml;
   }
 
-  // Load clean YouTube search results inside the Media Broadcast Player widget
+  // Set embedded frame URL using clean embed parameters
   mediaFrame.src = `https://www.youtube-nocookie.com/embed?listType=search&list=${encodeURIComponent(songQuery)}&autoplay=1`;
   mediaPlayer.style.display = 'block';
+
+  // Automatically attempt opening target stream in background tab if allowed
+  try {
+    window.open(targetUrl, '_blank', 'noopener');
+  } catch(e){}
 }
 
 function processCommand(raw) {

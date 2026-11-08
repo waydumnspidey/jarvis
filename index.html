@@ -215,98 +215,70 @@ async function askAI(userQuery) {
     return;
   }
 
-  conversationHistory.push({ role: "user", parts: [{ text: userQuery }] });
+// Function to fetch direct YouTube video ID using search grounding and launch clean embed (Fixes Error 153)
+async function playMusicBroadcast(songQuery) {
+  state.textContent = 'SEARCHING MEDIA TRACK...';
+  addMessage(`Searching media database for "${songQuery}", sir...`, 'jarvis');
 
-  const payload = {
-    contents: conversationHistory,
-    systemInstruction: {
-      parts: [{ text: "You are J.A.R.V.I.S., Tony Stark's legendary AI system. You possess hyper-intelligent analytical capabilities, deep logical reasoning, and a witty, polite demeanor. Answer all questions with high conceptual understanding and accuracy. Provide structured, precise answers while keeping spoken phrasing crisp and natural for voice synthesis." }]
-    }
-  };
+  const activeKey = userApiKey || GEMINI_API_KEY_PLACEHOLDER;
+  let videoId = null;
 
-  const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${activeKey}`;
-
-  let retries = 0;
-  const maxRetries = 3;
-  let success = false;
-
-  while (retries < maxRetries && !success) {
+  // Use Gemini Search Grounding to extract the exact 11-character YouTube video ID
+  if (activeKey) {
     try {
-      const response = await fetch(apiUrl, {
+      const searchPrompt = `Find the direct 11-character YouTube video ID for the song "${songQuery}". Return ONLY a JSON object with key "videoId". Do not write any markdown or text. Example: {"videoId": "dQw4w9WgXcQ"}`;
+      const payload = {
+        contents: [{ parts: [{ text: searchPrompt }] }],
+        tools: [{ "google_search": {} }]
+      };
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${activeKey}`;
+      
+      const res = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
-      if (response.status === 403) {
-        console.error("HTTP 403 Forbidden: Invalid or missing API key.");
-        reply("Access denied (403). The provided API key is invalid or unauthorized. Please check your key settings.");
-        state.textContent = 'READY FOR YOUR COMMAND';
-        keyPanel.style.display = 'block';
-        return;
-      }
-
-      if (!response.ok) {
-        throw new Error(`HTTP Error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-      if (replyText) {
-        conversationHistory.push({ role: "model", parts: [{ text: replyText }] });
-
-        if (conversationHistory.length > 20) {
-          conversationHistory = conversationHistory.slice(-20);
+      if (res.ok) {
+        const data = await res.json();
+        const textResp = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        const match = textResp.match(/[a-zA-Z0-9_-]{11}/);
+        if (match) {
+          videoId = match[0];
         }
-
-        reply(replyText);
-        success = true;
-      } else {
-        throw new Error("Invalid response format or empty text from model.");
       }
-    } catch (error) {
-      console.error(`AI Attempt ${retries + 1} failed:`, error);
-      retries++;
-      if (retries < maxRetries) {
-        await new Promise(res => setTimeout(res, 1000 * Math.pow(2, retries)));
-      } else {
-        reply("I was unable to process that request at this moment, sir. Please try again.");
-      }
+    } catch(e) {
+      console.warn("Direct Video ID search failed, falling back to clean web URL:", e);
     }
   }
-}
 
-// Function to fetch direct YouTube video ID using search grounding
-async function playMusicBroadcast(songQuery) {
-  state.textContent = 'LAUNCHING MEDIA BROADCAST...';
-  
-  const targetUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(songQuery)}`;
+  const targetUrl = videoId 
+    ? `https://www.youtube.com/watch?v=${videoId}` 
+    : `https://www.youtube.com/results?search_query=${encodeURIComponent(songQuery)}`;
+
+  const embedUrl = videoId 
+    ? `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&enablejsapi=1` 
+    : `https://www.youtube-nocookie.com/embed?listType=search&list=${encodeURIComponent(songQuery)}`;
 
   // Provide interactive fallback card inside the chat window with direct listening options
   const musicCardHtml = `
     <div style="margin-top:8px; padding:12px; border:1px solid var(--cyan); border-radius:6px; background:#030b15; text-align:center; box-shadow:0 0 15px #39eaff33;">
-      <div style="font-size:12px; color:var(--cyan); font-weight:bold; margin-bottom:8px; letter-spacing:1px;">🎵 MEDIA STREAM READY: ${songQuery.toUpperCase()}</div>
+      <div style="font-size:12px; color:var(--cyan); font-weight:bold; margin-bottom:8px; letter-spacing:1px;">🎵 BROADCAST READY: ${songQuery.toUpperCase()}</div>
       <a href="${targetUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block; padding:10px 18px; background:#087eaa; color:white; text-decoration:none; border-radius:4px; font-size:12px; font-weight:bold; border:1px solid #54efff; box-shadow:0 0 10px #39eaff55;">▶ LISTEN ON YOUTUBE</a>
     </div>
   `;
 
-  addMessage(`Searching and broadcasting "${songQuery}" for you now, sir.`, 'jarvis');
   speak(`Playing ${songQuery} for you now, sir.`);
 
   const lastMsg = chat.lastElementChild;
   if (lastMsg) {
-    lastMsg.innerHTML += musicCardHtml;
+    lastMsg.innerHTML = `Playing "${songQuery}" for you now, sir.` + musicCardHtml;
   }
 
   // Set embedded frame URL using clean embed parameters
-  mediaFrame.src = `https://www.youtube-nocookie.com/embed?listType=search&list=${encodeURIComponent(songQuery)}&autoplay=1`;
+  mediaFrame.src = embedUrl;
   mediaPlayer.style.display = 'block';
-
-  // Automatically attempt opening target stream in background tab if allowed
-  try {
-    window.open(targetUrl, '_blank', 'noopener');
-  } catch(e){}
+  state.textContent = 'READY FOR YOUR COMMAND';
 }
 
 function processCommand(raw) {

@@ -83,14 +83,13 @@ footer{color:#58778b;font-size:10px;letter-spacing:2px;margin-top:24px}
     <div class="panel-head"><span>ASSISTANT CONSOLE</span><span id="clock">--:--:--</span></div>
     
     <!-- Audio / Video Media Player Widget -->
-    <div id="mediaPlayer" style="display:none; margin-bottom: 12px; border: 1px solid var(--cyan); border-radius: 6px; padding: 10px; background: #030b15;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-        <span style="font-size:11px; color:var(--cyan); letter-spacing:1px;">🎵 MEDIA BROADCAST PLAYER</span>
+    <div id="mediaPlayer" style="display:none; margin-bottom: 12px; border: 1px solid var(--cyan); border-radius: 6px; padding: 12px; background: #030b15; box-shadow: 0 0 20px #39eaff22;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <span style="font-size:11px; color:var(--cyan); letter-spacing:1px; font-weight:bold;">🎵 AUDIO BROADCAST HUB</span>
         <button id="closeMediaBtn" style="padding: 2px 8px; font-size: 10px; border-color: #ff6b6b; color: #ff6b6b; background: transparent;">✕ CLOSE</button>
       </div>
-      <div style="position:relative; width:100%; height:0; padding-bottom:56.25%;">
-        <iframe id="mediaFrame" style="position:absolute; top:0; left:0; width:100%; height:100%; border:none; border-radius:4px;" allow="autoplay; encrypted-media" allowfullscreen></iframe>
-      </div>
+      <div id="mediaDetails" style="font-size: 13px; color: #eafaff; margin-bottom: 10px; text-align: center;">Preparing audio stream...</div>
+      <div id="mediaAudioContainer" style="display:flex; justify-content:center; align-items:center;"></div>
     </div>
 
     <div id="chat">
@@ -118,7 +117,8 @@ const apiKeyInput = document.getElementById('apiKeyInput');
 const saveKeyBtn = document.getElementById('saveKeyBtn');
 const keyStatus = document.getElementById('keyStatus');
 const mediaPlayer = document.getElementById('mediaPlayer');
-const mediaFrame = document.getElementById('mediaFrame');
+const mediaDetails = document.getElementById('mediaDetails');
+const mediaAudioContainer = document.getElementById('mediaAudioContainer');
 const closeMediaBtn = document.getElementById('closeMediaBtn');
 
 // Global API key storage initialization
@@ -144,7 +144,7 @@ settingsBtn.addEventListener('click', () => {
 
 closeMediaBtn.addEventListener('click', () => {
   mediaPlayer.style.display = 'none';
-  mediaFrame.src = '';
+  mediaAudioContainer.innerHTML = '';
 });
 
 saveKeyBtn.addEventListener('click', () => {
@@ -218,7 +218,7 @@ async function askAI(userQuery) {
 // Function to fetch direct YouTube video ID using search grounding and launch clean embed (Fixes Error 153)
 async function playMusicBroadcast(songQuery) {
   state.textContent = 'SEARCHING MEDIA TRACK...';
-  addMessage(`Searching media database for "${songQuery}", sir...`, 'jarvis');
+  addMessage(`Locating audio stream for "${songQuery}", sir...`, 'jarvis');
 
   const activeKey = userApiKey || GEMINI_API_KEY_PLACEHOLDER;
   let videoId = null;
@@ -248,23 +248,22 @@ async function playMusicBroadcast(songQuery) {
         }
       }
     } catch(e) {
-      console.warn("Direct Video ID search failed, falling back to clean web URL:", e);
+      console.warn("Direct Video ID search failed:", e);
     }
   }
 
-  const targetUrl = videoId 
+  const youtubeUrl = videoId 
     ? `https://www.youtube.com/watch?v=${videoId}` 
     : `https://www.youtube.com/results?search_query=${encodeURIComponent(songQuery)}`;
 
-  const embedUrl = videoId 
-    ? `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&enablejsapi=1` 
-    : `https://www.youtube-nocookie.com/embed?listType=search&list=${encodeURIComponent(songQuery)}`;
-
-  // Provide interactive fallback card inside the chat window with direct listening options
+  // Provide native HUD player controls inside the assistant console
   const musicCardHtml = `
-    <div style="margin-top:8px; padding:12px; border:1px solid var(--cyan); border-radius:6px; background:#030b15; text-align:center; box-shadow:0 0 15px #39eaff33;">
-      <div style="font-size:12px; color:var(--cyan); font-weight:bold; margin-bottom:8px; letter-spacing:1px;">🎵 BROADCAST READY: ${songQuery.toUpperCase()}</div>
-      <a href="${targetUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block; padding:10px 18px; background:#087eaa; color:white; text-decoration:none; border-radius:4px; font-size:12px; font-weight:bold; border:1px solid #54efff; box-shadow:0 0 10px #39eaff55;">▶ LISTEN ON YOUTUBE</a>
+    <div style="margin-top:10px; padding:14px; border:1px solid var(--cyan); border-radius:8px; background:#04101e; text-align:center; box-shadow:0 0 18px #39eaff33;">
+      <div style="font-size:12px; color:var(--cyan); font-weight:bold; margin-bottom:10px; letter-spacing:2px;">▶ AUDIO TRACK READY</div>
+      <div style="font-size:14px; color:#ffffff; font-weight:bold; margin-bottom:12px;">"${songQuery.toUpperCase()}"</div>
+      <a href="${youtubeUrl}" target="_blank" rel="noopener noreferrer" style="display:inline-block; padding:10px 20px; background:#087eaa; color:white; text-decoration:none; border-radius:4px; font-size:12px; font-weight:bold; border:1px solid #54efff; box-shadow:0 0 12px #39eaff55; transition:0.2s;">
+        🎵 LAUNCH FULL AUDIO ON YOUTUBE
+      </a>
     </div>
   `;
 
@@ -275,8 +274,13 @@ async function playMusicBroadcast(songQuery) {
     lastMsg.innerHTML = `Playing "${songQuery}" for you now, sir.` + musicCardHtml;
   }
 
-  // Set embedded frame URL using clean embed parameters
-  mediaFrame.src = embedUrl;
+  // Update Media Header Box
+  mediaDetails.innerHTML = `Track: <strong>${songQuery}</strong>`;
+  mediaAudioContainer.innerHTML = `
+    <a href="${youtubeUrl}" target="_blank" style="padding:8px 16px; background:#00b88a; color:#000; font-weight:bold; text-decoration:none; border-radius:4px; font-size:12px;">
+      ▶ PLAY AUDIO STREAM
+    </a>
+  `;
   mediaPlayer.style.display = 'block';
   state.textContent = 'READY FOR YOUR COMMAND';
 }

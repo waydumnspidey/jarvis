@@ -264,11 +264,25 @@ function processCommand(raw) {
   commandInput.value = '';
   const q = text.toLowerCase();
 
-  // Local quick action commands
-  if (q.startsWith('play ') || q.includes('play song') || q.includes('play music')) {
-    const song = text.replace(/^play\s+song\s+|^play\s+music\s+|^play\s+/i, '');
-    reply('Playing ' + song + ' on YouTube now, sir.');
-    window.open('https://www.youtube.com/results?search_query=' + encodeURIComponent(song), '_blank', 'noopener');
+  // Local quick action commands - Music & Media player handling
+  if (/^(play|listen to|put on|sing)\s+/i.test(q) || q.includes('play song') || q.includes('play music')) {
+    const song = text.replace(/^play\s+song\s+|^play\s+music\s+|^play\s+|^listen to\s+|^put on\s+|^sing\s+/i, '');
+    const searchUrl = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(song);
+    
+    // Open YouTube immediately to prevent browser popup blocking
+    const newWindow = window.open(searchUrl, '_blank', 'noopener');
+    
+    if (newWindow) {
+      reply('Opening and playing ' + song + ' on YouTube now, sir.');
+    } else {
+      reply('Pop-up blocked by your browser, sir. Click to open YouTube: ' + searchUrl, false);
+      // Fallback message link in chat
+      const item = document.createElement('div');
+      item.className = 'msg jarvis';
+      item.innerHTML = ` Sir, click here to play: <a href="${searchUrl}" target="_blank" style="color:var(--cyan);text-decoration:underline;">Listen to ${song} on YouTube</a>`;
+      chat.appendChild(item);
+      chat.scrollTop = chat.scrollHeight;
+    }
   } else if (q.includes('your name')) {
     reply('I am JARVIS, your browser-based AI voice assistant.');
   } else if (q.includes('time')) {

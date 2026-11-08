@@ -265,7 +265,11 @@ function processCommand(raw) {
   const q = text.toLowerCase();
 
   // Local quick action commands
-  if (q.includes('your name')) {
+  if (q.startsWith('play ') || q.includes('play song') || q.includes('play music')) {
+    const song = text.replace(/^play\s+song\s+|^play\s+music\s+|^play\s+/i, '');
+    reply('Playing ' + song + ' on YouTube now, sir.');
+    window.open('https://www.youtube.com/results?search_query=' + encodeURIComponent(song), '_blank', 'noopener');
+  } else if (q.includes('your name')) {
     reply('I am JARVIS, your browser-based AI voice assistant.');
   } else if (q.includes('time')) {
     reply('The current time is ' + new Date().toLocaleTimeString() + '.');
